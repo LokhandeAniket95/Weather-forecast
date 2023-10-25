@@ -4,19 +4,25 @@ import java.io.IOException;
 import java.util.HashMap;
 import java.util.Map;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.RestTemplate;
 import org.springframework.web.util.UriComponents;
 import org.springframework.web.util.UriComponentsBuilder;
 
+import com.example.weatherForecast.WeatherForecastApplication;
 import com.example.weatherForecast.Exception.WeatherException;
 import com.example.weatherForecast.constant.WeatherForecastConstant;
 import com.example.weatherForecast.model.WeatherForecastFor3Days;
@@ -29,11 +35,14 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 
 @Service
 public class WeatherForecastServiceImpl implements WeatherForecastService{
+	
+	final Logger logger = LoggerFactory.getLogger(WeatherForecastServiceImpl.class);
 
 	@Value("${weather.forcast.api.id}")
 	public String appid;
 
 	public ResponseEntity<WeatherForecastFor3Days> getWeatherForecastFor3DaysByCity(String cityName) throws JsonParseException, JsonMappingException, IOException {
+		logger.info("inside getWeatherForecastFor3DaysByCity");
 		RestTemplate template = new RestTemplate();
 		HttpHeaders headers = new HttpHeaders();
 		ObjectMapper objectMapper = new ObjectMapper();
@@ -50,6 +59,7 @@ public class WeatherForecastServiceImpl implements WeatherForecastService{
 		UriComponentsBuilder uri= UriComponentsBuilder.fromUriString(appendSearObjectBuilder.toUriString());
 		HttpEntity entity = new HttpEntity(headers);
 		try{
+			logger.info("fetching weatherforecast for {}", cityName);
 			responseEntity = template.exchange(uri.build().encode().toUri(), HttpMethod.GET, entity, String.class);
 			if(responseEntity.getStatusCode().equals(HttpStatus.OK)) {
 				WeatherForecastFor3Days weatherForecast = objectMapper.readValue(responseEntity.getBody(), WeatherForecastFor3Days.class);
@@ -69,7 +79,9 @@ public class WeatherForecastServiceImpl implements WeatherForecastService{
 		return response;
 	}
 
+	@Cacheable(cacheNames = "CityName", key = "#cityName")
 	public ResponseEntity<WeatherForecastForCurrentDay> getWeatherForecastForCurrentDaysByCity(String cityName) throws JsonParseException, JsonMappingException, IOException {
+		logger.info("inside getWeatherForecastForCurrentDaysByCity");
 		RestTemplate template = new RestTemplate();
 		HttpHeaders headers = new HttpHeaders();
 		ObjectMapper objectMapper = new ObjectMapper();
@@ -85,6 +97,7 @@ public class WeatherForecastServiceImpl implements WeatherForecastService{
 		UriComponentsBuilder uri= UriComponentsBuilder.fromUriString(appendSearObjectBuilder.toUriString());
 		HttpEntity entity = new HttpEntity(headers);
 		try{
+			logger.info("fetching weatherforecast for {}", cityName);
 			responseEntity = template.exchange(uri.build().encode().toUri(), HttpMethod.GET, entity, String.class);
 			if(responseEntity.getStatusCode().equals(HttpStatus.OK)) {
 				WeatherForecastForCurrentDay weatherForecast = objectMapper.readValue(responseEntity.getBody(), WeatherForecastForCurrentDay.class);
@@ -100,5 +113,11 @@ public class WeatherForecastServiceImpl implements WeatherForecastService{
 			throw new WeatherException("city not found");
 		}
 		return response;
+	}
+	
+	@Scheduled(cron = "0 0 0 * * *")
+	@CacheEvict(value = "CityName", allEntries = true)
+	public void clearCache() {
+		logger.info("clear clearCache");
 	}
 }
